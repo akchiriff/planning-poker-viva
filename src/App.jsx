@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import Ably from "ably";
 
+
 const SCALES = {
   fibonacci: {
     name: "Fibonacci",
