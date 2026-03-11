@@ -1,0 +1,7 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #F5F0E8; min-height: 100vh; font-family: 'DM Sans', sans-serif; color: #1a1a2e; -webkit-font-smoothing: antialiased; }
+#root { min-height: 100vh; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #F5F0E8; }
+::-webkit-scrollbar-thumb { background: #C4B89A; border-radius: 3px; }
+input::placeholder { color: #C4B89A; }
