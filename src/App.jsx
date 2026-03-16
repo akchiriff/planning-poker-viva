@@ -14,8 +14,8 @@ const SCALES = {
       { id:"8",   label:"8",  value:8,   special:false },
       { id:"13",  label:"13", value:13,  special:false },
       { id:"21",  label:"21", value:21,  special:false },
-      { id:"inf", label:"∞",  value:999, special:true  },
-      { id:"cof", label:"☕", value:-1,  special:true  },
+      { id:"inf", label:"\u221e",  value:999, special:true  },
+      { id:"cof", label:"\u2615", value:-1,  special:true  },
     ]
   },
   tshirt: {
@@ -29,8 +29,8 @@ const SCALES = {
       { id:"l",   label:"L",   value:5,   special:false },
       { id:"xl",  label:"XL",  value:8,   special:false },
       { id:"xxl", label:"XXL", value:13,  special:false },
-      { id:"inf", label:"∞",   value:999, special:true  },
-      { id:"cof", label:"☕",  value:-1,  special:true  },
+      { id:"inf", label:"\u221e",   value:999, special:true  },
+      { id:"cof", label:"\u2615",  value:-1,  special:true  },
     ]
   },
   powers: {
@@ -44,8 +44,8 @@ const SCALES = {
       { id:"8",  label:"8",  value:8,   special:false },
       { id:"16", label:"16", value:16,  special:false },
       { id:"32", label:"32", value:32,  special:false },
-      { id:"inf",label:"∞",  value:999, special:true  },
-      { id:"cof",label:"☕", value:-1,  special:true  },
+      { id:"inf",label:"\u221e",  value:999, special:true  },
+      { id:"cof",label:"\u2615", value:-1,  special:true  },
     ]
   }
 };
@@ -135,7 +135,7 @@ function PokerCard({ card, selected, onClick }) {
         color: selected?"#fff":(isCoffee?"#3D1A08":(isInf?"#1a4a6e":T.ink)),
         textShadow: selected?"0 2px 8px rgba(0,0,0,0.2)":"none",
       }}>
-        {isCoffee?"☕":card.label}
+        {isCoffee?"\u2615":card.label}
       </span>
       {!isCoffee&&!isInf&&(
         <span style={{fontSize:8,color:selected?"rgba(255,255,255,0.4)":T.sand,marginTop:3}}>♦</span>
@@ -178,7 +178,7 @@ function PlayerCard({ player, revealed, scaleKey, isMe, onKick, isObserver }) {
           ?"repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.03) 4px,rgba(255,255,255,0.03) 8px)"
           :"none",
       }}>
-        {isObserver?"👁️":(revealed&&card?(isCoffee?"☕":card.label):(player.vote?"?":""))}
+        {isObserver?"👁️":(revealed&&card?(isCoffee?"\u2615":card.label):(player.vote?"?":""))}
       </div>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:10,fontWeight:600,color:isMe?"#fff":(isObserver?"#C7D2FE":"rgba(255,255,255,0.85)"),fontFamily:"'DM Sans',sans-serif",maxWidth:72,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -559,12 +559,12 @@ export default function App() {
               return (
                 <div key={c.id} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 0",borderBottom:`1px solid ${T.cream}`}}>
                   <div style={{width:44,height:62,borderRadius:7,background:isW?T.accent:T.cream,border:`1.5px solid ${isW?T.accentL:T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:c.id==="cof"?20:(c.label.length>2?13:18),fontWeight:900,color:isW?"#fff":T.ink,fontFamily:"'Playfair Display',serif",flexShrink:0}}>
-                    {c.id==="cof"?"☕":c.label}
+                    {c.id==="cof"?"\u2615":c.label}
                   </div>
                   <div style={{flex:1}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                       <span style={{fontSize:13,fontWeight:700,color:isW?T.accent:T.inkMid,fontFamily:"'DM Sans',sans-serif"}}>
-                        {c.id==="cof"?"Café ☕":(c.id==="inf"?"∞ No estimable":c.label)}{isW?" ✦":""}
+                        {c.id==="cof"?"Café \u2615":(c.id==="inf"?"\u221e No estimable":c.label)}{isW?" ✦":""}
                       </span>
                       <span style={{fontSize:12,color:T.inkLight,fontFamily:"'DM Sans',sans-serif"}}>{count}/{totalVotes}</span>
                     </div>
@@ -577,10 +577,10 @@ export default function App() {
             })}
             <div style={{marginTop:16,padding:"14px 16px",background:isConsensus?"#EEF7F2":"#FFF7ED",borderRadius:12,border:`1px solid ${isConsensus?T.accentL:"#FED7AA"}`,textAlign:"center"}}>
               <div style={{fontSize:11,color:T.inkLight,marginBottom:4,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.5}}>
-                {winnerCard?.id==="cof"?"Necesitáis un descanso ☕":(winnerCard?.id==="inf"?"Historia no estimable":"Estimación ganadora")}
+                {winnerCard?.id==="cof"?"Necesitáis un descanso \u2615":(winnerCard?.id==="inf"?"Historia no estimable":"Estimación ganadora")}
               </div>
               <div style={{fontSize:28,fontWeight:900,color:isConsensus?T.accent:T.inkMid,fontFamily:"'Playfair Display',serif"}}>
-                {winnerCard?.id==="cof"?"☕":(winnerCard?.id==="inf"?"∞":(winnerCard?.label||"—"))}
+                {winnerCard?.id==="cof"?"\u2615":(winnerCard?.id==="inf"?"\u221e":(winnerCard?.label||"—"))}
                 {avgVal&&winnerCard?.id!=="cof"&&winnerCard?.id!=="inf"&&(
                   <span style={{fontSize:14,color:T.inkLight,fontWeight:400,marginLeft:10,fontFamily:"'DM Sans',sans-serif"}}>prom. {avgVal}</span>
                 )}
