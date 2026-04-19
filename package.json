@@ -16,4 +16,5 @@
     "@vitejs/plugin-react": "^4.3.0",
     "vite": "^8.0.5"
   }
+  "homepage": "https://akchiriff.github.io/planning-poker-viva"
 }
