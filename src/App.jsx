@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import Ably from "ably";
+import * as Ably from "ably";
 
 const SCALES = {
   fibonacci: {
@@ -51,6 +51,15 @@ const SCALES = {
 };
 
 const ABLY_KEY = "WmJ1Mw.fFg2Pw:cipRdirvvZ-RC9WVvfrtARistmTFTzvglM5ISPOASfQ";
+const DEV = import.meta.env.DEV;
+
+function devLog(...args) {
+  if (DEV) console.log("[Viva]", ...args);
+}
+
+function devWarn(...args) {
+  if (DEV) console.warn("[Viva]", ...args);
+}
 
 function getRoomFromURL() { return new URLSearchParams(window.location.search).get("room"); }
 function setRoomInURL(c) { const u=new URL(window.location.href); u.searchParams.set("room",c); window.history.replaceState({},""  ,u.toString()); }
@@ -225,6 +234,58 @@ function Toggle({ checked, onChange, label, sub }) {
   );
 }
 
+function ConnectionStatusBanner({ status, error }) {
+  const meta = {
+    loading: {
+      label: "Conectando con Ably...",
+      detail: "Estamos preparando la sala en tiempo real.",
+      color: T.inkMid,
+      bg: T.paper,
+      border: T.border,
+    },
+    connected: {
+      label: "En vivo",
+      detail: "La sala esta sincronizada.",
+      color: T.accent,
+      bg: "#EEF7F2",
+      border: T.accentL,
+    },
+    disconnected: {
+      label: "Desconectado",
+      detail: "Se perdio la conexion. Intentaremos recuperarla.",
+      color: T.red,
+      bg: "#FFF5F5",
+      border: "#FECACA",
+    },
+    reconnecting: {
+      label: "No se pudo conectar. Reintentando...",
+      detail: "Tus cambios pueden tardar unos segundos en sincronizarse.",
+      color: T.red,
+      bg: "#FFF7ED",
+      border: "#FED7AA",
+    },
+    error: {
+      label: "No se pudo conectar con Ably",
+      detail: error || "Revisa la configuracion o intenta recargar la pagina.",
+      color: T.red,
+      bg: "#FFF5F5",
+      border: "#FECACA",
+    },
+  }[status];
+
+  if (!meta || status === "idle") return null;
+
+  return (
+    <div style={{background:meta.bg,border:`1.5px solid ${meta.border}`,borderRadius:12,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10,boxShadow:`0 2px 10px ${T.shadow}`}}>
+      <span style={{width:10,height:10,borderRadius:"50%",background:meta.color,boxShadow:`0 0 0 3px ${meta.bg}`,flexShrink:0}} />
+      <div style={{fontFamily:"'DM Sans',sans-serif"}}>
+        <div style={{fontSize:13,fontWeight:700,color:meta.color}}>{meta.label}</div>
+        <div style={{fontSize:11,color:T.inkMid,marginTop:1}}>{meta.detail}</div>
+      </div>
+    </div>
+  );
+}
+
 // ─── App ──────────────────────────────────────────────────────
 
 function launchConfetti() {
@@ -269,6 +330,8 @@ export default function App() {
   const [scaleKey,setScaleKey]   = useState("fibonacci");
   const [showShare,setShowShare] = useState(false);
   const [connected,setConnected] = useState(false);
+  const [connectionStatus,setConnectionStatus] = useState("idle");
+  const [connectionError,setConnectionError] = useState("");
   const channelRef = useRef(null);
   const ablyRef    = useRef(null);
   const stateRef   = useRef({players:{},story:"",revealed:false,scaleKey:"fibonacci"});
@@ -285,14 +348,57 @@ export default function App() {
 
   const connectAbly = useCallback((code)=>{
     if(ablyRef.current) ablyRef.current.close();
+    setConnected(false);
+    setConnectionError("");
+    setConnectionStatus("loading");
+    devLog("connecting to Ably", { room: code, clientId: myId });
     const ably=new Ably.Realtime({key:ABLY_KEY,clientId:myId});
     ablyRef.current=ably;
-    ably.connection.on("connected",()=>setConnected(true));
-    ably.connection.on("disconnected",()=>setConnected(false));
+    ably.connection.on((stateChange)=>{
+      const current = stateChange.current;
+      devLog("Ably connection state", current, stateChange.reason || "");
+      setConnected(current==="connected");
+      if(current==="connected") {
+        setConnectionError("");
+        setConnectionStatus("connected");
+      } else if(current==="connecting") {
+        setConnectionStatus("loading");
+      } else if(current==="disconnected" || current==="suspended") {
+        setConnectionStatus("reconnecting");
+        setConnectionError(stateChange.reason?.message || "");
+      } else if(current==="failed") {
+        setConnectionStatus("error");
+        setConnectionError(stateChange.reason?.message || "Ably rechazo la conexion.");
+        devWarn("Ably connection failed", stateChange.reason);
+      } else if(current==="closed") {
+        setConnectionStatus("disconnected");
+      }
+    });
     const ch=ably.channels.get("vivaplanning-"+code);
     channelRef.current=ch;
-    ch.subscribe("state",msg=>applyState(msg.data));
-    ch.subscribe("req",msg=>{ if(msg.clientId!==myId) ch.publish("state",stateRef.current); });
+    devLog("subscribed channel", ch.name);
+    Promise.resolve(ch.subscribe("state",msg=>{
+      devLog("received state", msg.data);
+      applyState(msg.data);
+    })).catch(error=>{
+      devWarn("state subscription failed", error);
+      setConnectionStatus("error");
+      setConnectionError(error.message || "No se pudo suscribir al canal.");
+    });
+    Promise.resolve(ch.subscribe("req",msg=>{
+      devLog("received state request", msg.data);
+      if(msg.clientId!==myId) {
+        Promise.resolve(ch.publish("state",stateRef.current)).catch(error=>{
+          devWarn("state response publish failed", error);
+          setConnectionStatus("error");
+          setConnectionError(error.message || "No se pudo enviar el estado.");
+        });
+      }
+    })).catch(error=>{
+      devWarn("request subscription failed", error);
+      setConnectionStatus("error");
+      setConnectionError(error.message || "No se pudo suscribir al canal.");
+    });
     return ch;
   },[myId,applyState]);
 
@@ -304,7 +410,18 @@ export default function App() {
     setRevealed(next.revealed);
     setScaleKey(next.scaleKey||"fibonacci");
     if(next.revealed) setScreen("results");
-    channelRef.current?.publish("state",next);
+    if(!channelRef.current) {
+      setConnectionStatus("error");
+      setConnectionError("No hay canal activo para sincronizar la sala.");
+      return;
+    }
+    Promise.resolve(channelRef.current.publish("state",next)).then(()=>{
+      devLog("published state", next);
+    }).catch(error=>{
+      devWarn("state publish failed", error);
+      setConnectionStatus("error");
+      setConnectionError(error.message || "No se pudo sincronizar el estado.");
+    });
   },[]);
 
   function createRoom(){
@@ -314,7 +431,15 @@ export default function App() {
     const init={players:{[myId]:{name:nameInput.trim(),vote:null,observer:isObsInput}},story:"",revealed:false,scaleKey:"fibonacci"};
     stateRef.current=init;
     setPlayers(init.players);setStory("");setRevealed(false);setScaleKey("fibonacci");
-    setTimeout(()=>ch.publish("state",init),500);
+    setTimeout(()=>{
+      Promise.resolve(ch.publish("state",init)).then(()=>{
+        devLog("published initial state", init);
+      }).catch(error=>{
+        devWarn("initial state publish failed", error);
+        setConnectionStatus("error");
+        setConnectionError(error.message || "No se pudo crear la sala.");
+      });
+    },500);
     setRoomCode(code);setMyName(nameInput.trim());
     setRoomInURL(code);setScreen("voting");setShowShare(true);
   }
@@ -324,7 +449,13 @@ export default function App() {
     const code=codeInput.trim().toUpperCase();
     const ch=connectAbly(code);
     setTimeout(()=>{
-      ch.publish("req",{from:myId});
+      Promise.resolve(ch.publish("req",{from:myId})).then(()=>{
+        devLog("published state request", { room: code });
+      }).catch(error=>{
+        devWarn("state request publish failed", error);
+        setConnectionStatus("error");
+        setConnectionError(error.message || "No se pudo pedir el estado de la sala.");
+      });
       setTimeout(()=>{
         pub(s=>({...s,players:{...s.players,[myId]:{name:nameInput.trim(),vote:null,observer:isObsInput}}}));
       },600);
@@ -376,6 +507,12 @@ export default function App() {
   const inputSt = {width:"100%",background:T.cream,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 14px",color:T.ink,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif"};
   const ghostBtn = {background:T.paper,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"8px 14px",color:T.inkMid,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",fontWeight:600,boxShadow:`0 2px 8px ${T.shadow}`};
 
+  useEffect(() => {
+    if (screen === "results" && isConsensus) {
+      launchConfetti();
+    }
+  }, [screen, isConsensus]);
+
   // ── HOME ────────────────────────────────────────────────────
   if(screen==="home") return (
     <div style={{minHeight:"100vh",background:`linear-gradient(135deg,#F5F0E8 0%,#EDE8DC 100%)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",position:"relative",overflow:"hidden"}}>
@@ -423,6 +560,7 @@ export default function App() {
   if(screen==="voting") return (
     <div style={{minHeight:"100vh",background:`linear-gradient(135deg,#F5F0E8 0%,#EDE8DC 100%)`,padding:"20px 16px"}}>
       <div style={{maxWidth:1000,margin:"0 auto"}}>
+        <ConnectionStatusBanner status={connectionStatus} error={connectionError}/>
 
         {/* Top bar */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
@@ -435,7 +573,7 @@ export default function App() {
               <strong style={{color:T.ink}}>{myName}</strong>
               {amObserver&&<span style={{color:"#6366F1",marginLeft:6,fontSize:11}}>👁️ observando</span>}
               {" · "}<span style={{fontFamily:"monospace",fontWeight:700,color:T.accent,letterSpacing:2}}>{roomCode}</span>
-              <span style={{marginLeft:8,fontSize:10,color:connected?T.accentL:T.red}}>● {connected?"en vivo":"reconectando..."}</span>
+              <span style={{marginLeft:8,fontSize:10,color:connected?T.accentL:T.red}}>● {connected?"en vivo":(connectionStatus==="loading"?"conectando...":"reconectando...")}</span>
             </div>
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
@@ -542,6 +680,8 @@ export default function App() {
   if(screen==="results") return (
     <div style={{minHeight:"100vh",background:`linear-gradient(135deg,#F5F0E8 0%,#EDE8DC 100%)`,padding:"20px 16px"}}>
       <div style={{maxWidth:1000,margin:"0 auto"}}>
+        <ConnectionStatusBanner status={connectionStatus} error={connectionError}/>
+
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{fontSize:11,fontWeight:600,color:T.accentL,letterSpacing:3,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>Resultados · {SCALES[scaleKey].name}</div>
           <h2 style={{fontSize:34,fontWeight:900,color:T.ink,fontFamily:"'Playfair Display',serif",margin:"0 0 6px"}}>Votos revelados</h2>
@@ -641,14 +781,6 @@ export default function App() {
       </div>
     </div>
   );
-
-
-  // Confeti al consenso
-  useEffect(() => {
-    if (screen === "results" && isConsensus) {
-      launchConfetti();
-    }
-  }, [screen, isConsensus]);
 
   return null;
 }
